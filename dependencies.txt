@@ -1,5 +1,6 @@
-flask
-numpy
-scipy
-seaborn
-matplotlib
+flask>=2.3
+numpy>=1.24
+scipy>=1.10
+pandas>=2.0
+matplotlib>=3.7
+seaborn>=0.12

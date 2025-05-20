@@ -1,15 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <title>StaCal - Statistics Calculator</title>
   <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- SweetAlert2 -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <!-- Custom CSS -->
   <link rel="stylesheet" href="{{ url_for('static', filename='index.css') }}">
   <!-- Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;600&family=JetBrains+Mono:wght@400;700&display=swap"
+    rel="stylesheet">
 </head>
+
 <body class="text-light">
   <div class="container py-5 d-flex justify-content-center align-items-center">
     <div class="glass-container text-center w-100">
@@ -21,10 +27,10 @@
       <!-- Button Row -->
       <div class="row justify-content-center my-5">
         <div class="col-md-3 d-grid mb-2">
-          <button class="btn btn-outline-light shadow">🎲 Random</button>
+          <button id="btnRandomData" class="btn btn-outline-light shadow">🎲 Random</button>
         </div>
         <div class="col-md-3 d-grid mb-2">
-          <button class="btn btn-outline-success shadow">📂 Load Data</button>
+          <button id="btnUploadData" class="btn btn-outline-success shadow">📂 Load Data</button>
         </div>
       </div>
 
@@ -36,23 +42,203 @@
 
       <!-- Calculate Button -->
       <div class="mb-5">
-        <button class="btn btn-lg btn-primary px-5 shadow">🔢 Calculate</button>
+        <button id="btnCalculate" class="btn btn-lg btn-primary px-5 shadow">🔢 Calculate</button>
       </div>
 
-      <!-- Info Texts -->
-      <p class="fs-5 text-white-50">Results will appear below</p>
-      <p class="text-secondary">Upload or generate data to begin your analysis.</p>
+      <!-- Results Output -->
+      <div id="resultsContainer" class="mt-5 text-start"></div>
 
       <!-- Download -->
       <div class="mt-5">
-        <button class="btn btn-outline-light shadow">⬇️ Download Plots</button>
+        <button id="btnDownloadPlots" class="btn btn-outline-info shadow">⬇️ Download Plots</button>
       </div>
 
     </div>
   </div>
 
-
   <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Logic JS -->
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const sampleSwitch = document.getElementById("sampleSwitch");
+
+      // === 🎲 Random Data ===
+      document.querySelector(".btn-outline-light").addEventListener("click", async () => {
+        const { value: formValues } = await Swal.fire({
+          title: 'Generate Random Data',
+          html:
+            `<label>Number of elements</label>
+          <input id="swal-n" type="number" class="swal2-input" value="50">
+          <label>Distribution</label>
+          <select id="swal-dist" class="swal2-input">
+            <option value="normal">Normal</option>
+            <option value="uniform">Uniform</option>
+            <option value="exponential">Exponential</option>
+            <option value="binomial">Binomial</option>
+            <option value="poisson">Poisson</option>
+          </select>`,
+          focusConfirm: false,
+          showCancelButton: true,
+          preConfirm: () => {
+            return [
+              document.getElementById('swal-n').value,
+              document.getElementById('swal-dist').value
+            ]
+          }
+        });
+
+        if (!formValues) return;
+
+        try {
+          const res = await fetch("/random-data", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ n: formValues[0], distribution: formValues[1] })
+          });
+          const data = await res.json();
+          Swal.fire(data.message);
+        } catch (e) {
+          Swal.fire("Error generating data. Using fallback.");
+        }
+      });
+
+      // === 📂 Load Data ===
+      document.querySelector(".btn-outline-success").addEventListener("click", async () => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = ".csv";
+
+        input.onchange = async (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+
+          const formData = new FormData();
+          formData.append("file", file);
+
+          try {
+            const res = await fetch("/upload", {
+              method: "POST",
+              body: formData
+            });
+            const data = await res.json();
+            Swal.fire(data.message);
+          } catch (e) {
+            Swal.fire("Upload failed. Using fallback data.");
+          }
+        };
+
+        input.click();
+      });
+
+      // === ✅ Toggle Sample ===
+      sampleSwitch.addEventListener("change", async () => {
+        try {
+          await fetch("/toggle-sample", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sample: sampleSwitch.checked })
+          });
+        } catch (e) {
+          Swal.fire("Failed to update sample mode.");
+        }
+      });
+
+      // === 🔢 Calculate ===
+      document.querySelector(".btn-primary").addEventListener("click", async () => {
+        try {
+          const res = await fetch("/calculate");
+          const data = await res.json();
+
+          if (!data.success) {
+            Swal.fire("No data available. Fallback used.");
+            return;
+          }
+
+          let output = `<table class="table table-dark table-striped table-bordered">
+  <thead>
+    <tr>
+      <th style="width: 60%;">Statistic</th>
+      <th style="width: 40%;">Value</th>
+    </tr>
+  </thead>
+  <tbody>`;
+          for (const [key, value] of Object.entries(data.results)) {
+            let displayValue;
+
+            if (typeof value === 'object' && !Array.isArray(value)) {
+              displayValue = `<ul class="mb-0 ps-3">`;
+              for (const [subKey, subVal] of Object.entries(value)) {
+                displayValue += `<li><strong>${subKey}:</strong> ${subVal}</li>`;
+              }
+              displayValue += `</ul>`;
+            } else if (Array.isArray(value)) {
+              displayValue = value.join(", ");
+            } else {
+              displayValue = value;
+            }
+
+            output += `<tr><td style="width: 60%;">${key}</td><td>${displayValue}</td></tr>`;
+          }
+
+          output += `</tbody></table>`;
+
+          Swal.fire({
+            title: "📊 Statistics Result",
+            html: output,
+            width: "50%",
+            customClass: { popup: 'bg-dark text-light' }
+          });
+
+        } catch (e) {
+          Swal.fire("Calculation failed. Fallback used.");
+        }
+      });
+
+      // ✅ ⬇️ Download Plots
+      const downloadBtn = document.querySelector("#btnDownloadPlots");
+      if (downloadBtn) {
+        downloadBtn.addEventListener("click", async () => {
+          try {
+            const [histResponse, boxResponse] = await Promise.all([
+              fetch("/download/hist"),
+              fetch("/download/box")
+            ]);
+
+            if (!histResponse.ok || !boxResponse.ok) {
+              throw new Error("Download failed");
+            }
+
+            const histBlob = await histResponse.blob();
+            const boxBlob = await boxResponse.blob();
+
+            const downloadFile = (blob, filename) => {
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = filename;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+            };
+
+            downloadFile(histBlob, "histogram.png");
+            downloadFile(boxBlob, "boxplot.png");
+
+          } catch (e) {
+            console.error(e);
+            Swal.fire("❌ Unable to download plots. Make sure you've calculated the data first.");
+          }
+        });
+      }
+
+    });
+  </script>
+
+
+
 </body>
+
 </html>
