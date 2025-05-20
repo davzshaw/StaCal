@@ -1,0 +1,79 @@
+/* === Background === */
+body {
+  background: 
+    linear-gradient(rgba(10, 10, 30, 0.7), rgba(10, 10, 30, 0.9)),
+    url('/static/img/background.jpg') no-repeat center center fixed;
+  background-size: cover;
+  font-family: 'Fira Sans', 'JetBrains Mono', sans-serif;
+  color: #f8f9fa;
+  min-height: 100vh;
+  font-size: 1.25rem; /* Aumenta el tamaño global del texto en 25% */
+}
+
+/* === Glass effect container === */
+.glass-container {
+  background: rgba(0, 0, 0, 0.6); /* fondo oscuro semitransparente */
+  padding: 2rem;
+  border-radius: 20px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px); /* Para Safari */
+}
+
+/* === Heading === */
+h1, h2 {
+  text-shadow: 0 3px 6px rgba(0, 0, 0, 0.6);
+  color: #00e5ff;
+}
+
+/* === Paragraphs and labels === */
+p, label {
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+
+.lead {
+  color: #b2ebf2;
+}
+
+.text-accent {
+  color: #00e5ff;
+}
+
+.form-check-label {
+  color: #f0f0f0;
+}
+
+/* === Buttons === */
+button {
+  border-radius: 14px;
+  font-weight: 600;
+  transition: all 0.25s ease-in-out;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  background-color: #00c896;
+  color: white;
+  border: none;
+}
+
+button:hover {
+  transform: scale(1.05);
+  opacity: 0.95;
+}
+
+/* === Switch (Bootstrap toggle) === */
+.form-check-input {
+  width: 3em;
+  height: 1.5em;
+}
+
+.form-check-input:checked {
+  background-color: #00c896;
+  border-color: #00c896;
+}
+
+/* === Responsive tweaks === */
+@media (max-width: 768px) {
+  .container {
+    padding: 2rem 1rem;
+  }
+}
