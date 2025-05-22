@@ -16,7 +16,7 @@ def calculateStatistics(data, isSample=True):
         isSample (bool): Use sample statistics if True; population otherwise.
 
     Returns:
-        dict: Dictionary of statistical metrics.
+        dict: Dictionary of statistical metrics, including original data.
     """
     try:
         data = np.array(data)
@@ -61,6 +61,7 @@ def calculateStatistics(data, isSample=True):
                 "iqr": roundSig(iqr),
                 "percentiles": {k: roundSig(v) for k, v in percentiles.items()},
                 "kolmogorovTest": ksResults,
+                "originalData": [roundSig(x) for x in data.tolist()],  # <== NUEVO
             }
         )
 
@@ -70,31 +71,51 @@ def calculateStatistics(data, isSample=True):
         return calculateStatistics(fallbackData, isSample=True)
 
 
-def generateRandomData(n, distribution):
+def generateRandomData(n, distribution, **kwargs):
     """
     Generate synthetic numeric data for testing.
 
     Args:
         n (int): Number of elements.
         distribution (str): Distribution type to sample from.
+        **kwargs: Additional parameters for distribution (e.g. mu, sigma, etc.)
 
     Returns:
         list: Random data.
     """
     try:
         n = int(n)
+
         if distribution == "normal":
-            return np.random.normal(loc=0, scale=1, size=n).tolist()
+            mu = float(kwargs.get("mu", 0))
+            sigma = float(kwargs.get("sigma", 1))
+
+            return np.random.normal(loc=mu, scale=sigma, size=n).tolist()
+
         elif distribution == "uniform":
-            return np.random.uniform(low=0, high=1, size=n).tolist()
+            a = float(kwargs.get("a", 0))
+            b = float(kwargs.get("b", 1))
+
+            return np.random.uniform(low=a, high=b, size=n).tolist()
+
         elif distribution == "exponential":
-            return np.random.exponential(scale=1.0, size=n).tolist()
+            lam = float(kwargs.get("lam", 1))
+
+            return np.random.exponential(scale=1.0 / lam, size=n).tolist()
+
         elif distribution == "binomial":
-            return np.random.binomial(n=10, p=0.5, size=n).tolist()
+            trials = int(kwargs.get("trials", 10))
+            p = float(kwargs.get("p", 0.5))
+            return np.random.binomial(n=trials, p=p, size=n).tolist()
+
         elif distribution == "poisson":
-            return np.random.poisson(lam=3, size=n).tolist()
+            lam = float(kwargs.get("lam", 3))
+
+            return np.random.poisson(lam=lam, size=n).tolist()
+
         else:
             raise ValueError("Unsupported distribution")
+
     except Exception as e:
         print("Error in generateRandomData:", e)
         return np.random.normal(0, 1, 50).tolist()
@@ -150,8 +171,10 @@ def generatePlots(data, outputDir="static/plots"):
         plt.savefig(boxPath)
         plt.close()
 
-        return histPath, boxPath
+        print(f"Saved histogram: {histPath}")
+        print(f"Saved boxplot: {boxPath}")
 
+        return histPath, boxPath
     except Exception as e:
         print("Error in generatePlots:", e)
         return None, None
@@ -179,19 +202,19 @@ def makeSerializable(obj):
         return obj
 
 
-def roundSig(x, sig=2):
+def roundSig(x, decimals=2):
     """
     Round a number to a specified number of significant digits.
 
     Args:
         x (float or int): Number to round.
-        sig (int): Significant digits.
+        decimals (int): Number of decimal places.
 
     Returns:
         float: Rounded number.
     """
     if isinstance(x, (int, float, np.number)):
-        return float(f"{x:.{sig}g}")
+        return float(f"{x:.{decimals}f}")
     return x
 
 
@@ -214,9 +237,15 @@ def goodnessOfFitKSTest(data):
         "beta",
         "laplace",
         "t",
-        "pareto",
         "cauchy",
         "triang",
+        "weibull_min",
+        "weibull_max",
+        "gumbel_r",
+        "gumbel_l",
+        "logistic",
+        "poisson",
+        "binom",
     ]
 
     results = {}

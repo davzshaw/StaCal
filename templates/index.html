@@ -66,103 +66,188 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
   <!-- Logic JS -->
-  <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      const sampleSwitch = document.getElementById("sampleSwitch");
+   <script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const sampleSwitch = document.getElementById("sampleSwitch");
 
-      // === 🎲 Random Data ===
-      document.querySelector(".btn-outline-light").addEventListener("click", async () => {
-        const { value: formValues } = await Swal.fire({
-          title: 'Generate Random Data',
-          html:
-            `<label>Number of elements</label>
-          <input id="swal-n" type="number" class="swal2-input" value="50">
-          <label>Distribution</label>
-          <select id="swal-dist" class="swal2-input">
-            <option value="normal">Normal</option>
-            <option value="uniform">Uniform</option>
-            <option value="exponential">Exponential</option>
-            <option value="binomial">Binomial</option>
-            <option value="poisson">Poisson</option>
-          </select>`,
-          focusConfirm: false,
-          showCancelButton: true,
-          preConfirm: () => {
-            return [
-              document.getElementById('swal-n').value,
-              document.getElementById('swal-dist').value
-            ]
-          }
+    // === 🎲 Random Data ===
+    document.querySelector(".btn-outline-light").addEventListener("click", async () => {
+      const { value: distChoice } = await Swal.fire({
+        title: 'Choose Distribution',
+        input: 'select',
+        inputOptions: {
+          normal: 'Normal',
+          uniform: 'Uniform',
+          exponential: 'Exponential',
+          binomial: 'Binomial',
+          poisson: 'Poisson'
+        },
+        inputPlaceholder: 'Select a distribution',
+        showCancelButton: true
+      });
+
+      if (!distChoice) return;
+
+      const distParams = {
+        normal: {
+          html: `
+            <label>Number of Elements</label>
+            <input id="swal-n" type="number" class="swal2-input" value="50">
+            <label>μ (Mean)</label>
+            <input id="swal-mu" type="number" class="swal2-input" value="0">
+            <label>σ (Standard Deviation)</label>
+            <input id="swal-sigma" type="number" class="swal2-input" value="1">
+          `
+        },
+        uniform: {
+          html: `
+            <label>Number of Elements</label>
+            <input id="swal-n" type="number" class="swal2-input" value="50">
+            <label>a (Min)</label>
+            <input id="swal-a" type="number" class="swal2-input" value="0">
+            <label>b (Max)</label>
+            <input id="swal-b" type="number" class="swal2-input" value="10">
+          `
+        },
+        exponential: {
+          html: `
+            <label>Number of Elements</label>
+            <input id="swal-n" type="number" class="swal2-input" value="50">
+            <label>λ (Rate)</label>
+            <input id="swal-lambda" type="number" class="swal2-input" value="1">
+          `
+        },
+        binomial: {
+          html: `
+            <label>Number of Elements</label>
+            <input id="swal-n" type="number" class="swal2-input" value="50">
+            <label>n (Number of trials)</label>
+            <input id="swal-trials" type="number" class="swal2-input" value="10">
+            <label>p (Probability of success)</label>
+            <input id="swal-p" type="number" step="0.01" class="swal2-input" value="0.5">
+          `
+        },
+        poisson: {
+          html: `
+            <label>Number of Elements</label>
+            <input id="swal-n" type="number" class="swal2-input" value="50">
+            <label>λ (Rate)</label>
+            <input id="swal-lambda" type="number" class="swal2-input" value="3">
+          `
+        }
+      };
+
+      const paramConfig = distParams[distChoice];
+      if (!paramConfig) return;
+
+      const { value: params } = await Swal.fire({
+        title: `Set Parameters: ${distChoice.charAt(0).toUpperCase() + distChoice.slice(1)}`,
+        html: paramConfig.html,
+        focusConfirm: false,
+        showCancelButton: true,
+        preConfirm: () => {
+          const form = document.querySelectorAll('.swal2-input');
+          return Array.from(form).map(input => input.value);
+        }
+      });
+
+      if (!params) return;
+
+      const distSpecific = {};
+      switch (distChoice) {
+        case 'normal':
+          distSpecific.mu = Number(params[1]);
+          distSpecific.sigma = Number(params[2]);
+          break;
+        case 'uniform':
+          distSpecific.a = Number(params[1]);
+          distSpecific.b = Number(params[2]);
+          break;
+        case 'exponential':
+          distSpecific.lam = Number(params[1]);
+          break;
+        case 'binomial':
+          distSpecific.trials = Number(params[1]);
+          distSpecific.p = Number(params[2]);
+          break;
+        case 'poisson':
+          distSpecific.lam = Number(params[1]);
+          break;
+      }
+
+      const payload = {
+        distribution: distChoice,
+        n: Number(params[0]),
+        params: distSpecific
+      };
+
+      try {
+        const res = await fetch("/random-data", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
         });
+        const data = await res.json();
+        Swal.fire(data.message);
+      } catch (e) {
+        console.error(e);
+        Swal.fire("Error generating data.");
+      }
+    });
 
-        if (!formValues) return;
+    // === 📂 Load Data ===
+    document.querySelector(".btn-outline-success").addEventListener("click", async () => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".csv";
+
+      input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append("file", file);
 
         try {
-          const res = await fetch("/random-data", {
+          const res = await fetch("/upload", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ n: formValues[0], distribution: formValues[1] })
+            body: formData
           });
           const data = await res.json();
           Swal.fire(data.message);
         } catch (e) {
-          Swal.fire("Error generating data. Using fallback.");
+          Swal.fire("Upload failed. Using fallback data.");
         }
-      });
+      };
 
-      // === 📂 Load Data ===
-      document.querySelector(".btn-outline-success").addEventListener("click", async () => {
-        const input = document.createElement("input");
-        input.type = "file";
-        input.accept = ".csv";
+      input.click();
+    });
 
-        input.onchange = async (e) => {
-          const file = e.target.files[0];
-          if (!file) return;
+    // === ✅ Toggle Sample ===
+    sampleSwitch.addEventListener("change", async () => {
+      try {
+        await fetch("/toggle-sample", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sample: sampleSwitch.checked })
+        });
+      } catch (e) {
+        Swal.fire("Failed to update sample mode.");
+      }
+    });
 
-          const formData = new FormData();
-          formData.append("file", file);
+    // === 🔢 Calculate ===
+    document.querySelector(".btn-primary").addEventListener("click", async () => {
+      try {
+        const res = await fetch("/calculate");
+        const data = await res.json();
 
-          try {
-            const res = await fetch("/upload", {
-              method: "POST",
-              body: formData
-            });
-            const data = await res.json();
-            Swal.fire(data.message);
-          } catch (e) {
-            Swal.fire("Upload failed. Using fallback data.");
-          }
-        };
-
-        input.click();
-      });
-
-      // === ✅ Toggle Sample ===
-      sampleSwitch.addEventListener("change", async () => {
-        try {
-          await fetch("/toggle-sample", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ sample: sampleSwitch.checked })
-          });
-        } catch (e) {
-          Swal.fire("Failed to update sample mode.");
+        if (!data.success) {
+          Swal.fire("No data available. Fallback used.");
+          return;
         }
-      });
 
-      // === 🔢 Calculate ===
-      document.querySelector(".btn-primary").addEventListener("click", async () => {
-        try {
-          const res = await fetch("/calculate");
-          const data = await res.json();
-
-          if (!data.success) {
-            Swal.fire("No data available. Fallback used.");
-            return;
-          }
-
-          let output = `<table class="table table-dark table-striped table-bordered">
+        let output = `<table class="table table-dark table-striped table-bordered">
   <thead>
     <tr>
       <th style="width: 60%;">Statistic</th>
@@ -170,79 +255,76 @@
     </tr>
   </thead>
   <tbody>`;
-          for (const [key, value] of Object.entries(data.results)) {
-            let displayValue;
 
-            if (typeof value === 'object' && !Array.isArray(value)) {
-              displayValue = `<ul class="mb-0 ps-3">`;
-              for (const [subKey, subVal] of Object.entries(value)) {
-                displayValue += `<li><strong>${subKey}:</strong> ${subVal}</li>`;
-              }
-              displayValue += `</ul>`;
-            } else if (Array.isArray(value)) {
-              displayValue = value.join(", ");
-            } else {
-              displayValue = value;
+        for (const [key, value] of Object.entries(data.results)) {
+          let displayValue;
+
+          if (typeof value === 'object' && !Array.isArray(value)) {
+            displayValue = `<ul class="mb-0 ps-3">`;
+            for (const [subKey, subVal] of Object.entries(value)) {
+              displayValue += `<li><strong>${subKey}:</strong> ${subVal}</li>`;
             }
-
-            output += `<tr><td style="width: 60%;">${key}</td><td>${displayValue}</td></tr>`;
+            displayValue += `</ul>`;
+          } else if (Array.isArray(value)) {
+            displayValue = value.join(", ");
+          } else {
+            displayValue = value;
           }
 
-          output += `</tbody></table>`;
-
-          Swal.fire({
-            title: "📊 Statistics Result",
-            html: output,
-            width: "50%",
-            customClass: { popup: 'bg-dark text-light' }
-          });
-
-        } catch (e) {
-          Swal.fire("Calculation failed. Fallback used.");
+          output += `<tr><td>${key}</td><td>${displayValue}</td></tr>`;
         }
-      });
 
-      // ✅ ⬇️ Download Plots
-      const downloadBtn = document.querySelector("#btnDownloadPlots");
-      if (downloadBtn) {
-        downloadBtn.addEventListener("click", async () => {
-          try {
-            const [histResponse, boxResponse] = await Promise.all([
-              fetch("/download/hist"),
-              fetch("/download/box")
-            ]);
+        output += `</tbody></table>`;
 
-            if (!histResponse.ok || !boxResponse.ok) {
-              throw new Error("Download failed");
-            }
-
-            const histBlob = await histResponse.blob();
-            const boxBlob = await boxResponse.blob();
-
-            const downloadFile = (blob, filename) => {
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = filename;
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-              URL.revokeObjectURL(url);
-            };
-
-            downloadFile(histBlob, "histogram.png");
-            downloadFile(boxBlob, "boxplot.png");
-
-          } catch (e) {
-            console.error(e);
-            Swal.fire("❌ Unable to download plots. Make sure you've calculated the data first.");
-          }
+        Swal.fire({
+          title: "📊 Statistics Result",
+          html: output,
+          width: "50%",
+          customClass: { popup: 'bg-dark text-light' }
         });
+
+      } catch (e) {
+        Swal.fire("Calculation failed. Fallback used.");
       }
-
     });
-  </script>
 
+    // ✅ ⬇️ Download Plots
+    document.querySelector("#btnDownloadPlots").addEventListener("click", async () => {
+      try {
+        const [histResponse, boxResponse] = await Promise.all([
+          fetch("/download/hist"),
+          fetch("/download/box")
+        ]);
+
+        if (!histResponse.ok || !boxResponse.ok) {
+          throw new Error("Download failed");
+        }
+
+        const histBlob = await histResponse.blob();
+        const boxBlob = await boxResponse.blob();
+
+        const downloadFile = (blob, filename) => {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        };
+
+        downloadFile(histBlob, "histogram.png");
+        downloadFile(boxBlob, "boxplot.png");
+
+      } catch (e) {
+        console.error(e);
+        Swal.fire("❌ Unable to download plots. Make sure you've calculated the data first.");
+      }
+    });
+
+  });
+</script>
 
 
 </body>

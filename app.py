@@ -18,9 +18,9 @@ os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 os.makedirs(app.config["PLOTS_FOLDER"], exist_ok=True)
 
 # === Global State ===
-currentData = []
-isSample = True
-lastPlots = ("", "")
+current_data = []
+is_sample = True
+last_plots = ("", "")
 
 
 @app.route("/")
@@ -34,105 +34,128 @@ def visualize():
     box = session.get("box_path")
 
     if not hist or not box:
-        return "Plots not available. Please calculate first.", 404
+        return "Plots not available. Please calculate statistics first.", 404
 
     return render_template("visualize.html", hist_path=hist, box_path=box)
 
 
 @app.route("/random-data", methods=["POST"])
-def randomData():
+def random_data():
+    global current_data
     try:
-        n = int(request.json.get("n", 50))
-        distro = request.json.get("distribution", "normal")
-        global currentData
-        currentData = generateRandomData(n, distro)
-        return jsonify(
-            {
-                "message": f"{n} random values generated using {distro} distribution.",
-                "success": True,
-            }
-        )
+        req = request.get_json()
+        n = int(req.get("n", 50))
+        distro = req.get("distribution", "normal")
+
+        params = req.get("params", {})  # <-- Obtiene los parámetros adicionales del frontend
+        current_data = generateRandomData(n, distro, **params)
+
+
+        return jsonify({
+            "message": f"{n} random values generated using {distro} distribution.",
+            "success": True
+        })
     except Exception as e:
-        print(e)
-        return jsonify(
-            {
-                "message": "Error generating random data. Using fallback.",
-                "success": False,
-            }
-        )
+        print("Error in /random-data:", e)
+        return jsonify({
+            "message": "Error generating random data. Fallback data will be used.",
+            "success": False
+        })
 
 
 @app.route("/upload", methods=["POST"])
 def upload():
+    global current_data
     file = request.files.get("file")
+
     if not file:
         return jsonify({"message": "No file uploaded.", "success": False})
 
-    filePath = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
-    file.save(filePath)
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
+    file.save(file_path)
 
-    global currentData
-    currentData = extractFirstNumericColumn(filePath)
-
-    return jsonify({"message": "Data uploaded and processed.", "success": True})
+    try:
+        current_data = extractFirstNumericColumn(file_path)
+        return jsonify({"message": "File uploaded and data extracted.", "success": True})
+    except Exception as e:
+        print("Error in /upload:", e)
+        return jsonify({"message": "Failed to process the uploaded file.", "success": False})
 
 
 @app.route("/toggle-sample", methods=["POST"])
-def toggleSample():
-    global isSample
-    isSample = bool(request.json.get("sample", True))
-    return jsonify({"message": f"Sample mode set to {isSample}.", "success": True})
+def toggle_sample():
+    global is_sample
+    is_sample = bool(request.json.get("sample", True))
+    return jsonify({"message": f"Sample mode set to {is_sample}.", "success": True})
 
 
 @app.route("/calculate", methods=["GET"])
 def calculate():
-    global lastPlots
+    global last_plots
 
-    if not currentData:
-        return jsonify(
-            {"message": "No data available. Using fallback.", "success": False}
-        )
+    if not current_data:
+        return jsonify({
+            "message": "No data available for analysis.",
+            "success": False
+        })
 
-    stats = calculateStatistics(currentData, isSample)
-    histPath, boxPath = generatePlots(currentData)
-    lastPlots = (histPath, boxPath)
+    try:
+        stats = calculateStatistics(current_data, is_sample)
+        hist_path, box_path = generatePlots(current_data)
 
-    session["hist_path"] = os.path.basename(histPath)
-    session["box_path"] = os.path.basename(boxPath)
+        if not hist_path or not box_path:
+            raise Exception("Plot generation failed.")
 
-    return jsonify(
-        {"results": stats, "message": "Calculation complete.", "success": True}
-    )
+        # Save plot names in session for download/visualization
+        session["hist_path"] = os.path.basename(hist_path)
+        session["box_path"] = os.path.basename(box_path)
+        last_plots = (hist_path, box_path)
+
+        return jsonify({
+            "results": stats,
+            "message": "Statistics calculated and plots generated.",
+            "success": True
+        })
+    except Exception as e:
+        print("Error in /calculate:", e)
+        return jsonify({
+            "message": "Failed to calculate statistics or generate plots.",
+            "success": False
+        })
 
 
-@app.route("/download/<plotType>", methods=["GET"])
-def downloadPlot(plotType):
-    path = lastPlots[0] if plotType == "hist" else lastPlots[1]
+@app.route("/download/<plot_type>", methods=["GET"])
+def download_plot(plot_type):
+    path = last_plots[0] if plot_type == "hist" else last_plots[1]
     if not path or not os.path.exists(path):
-        return jsonify({"message": "Plot not available.", "success": False})
+        return jsonify({"message": "Requested plot not found.", "success": False})
     return send_file(path, as_attachment=True)
 
 
-@app.route("/download-plots")
-def downloadPlots():
+@app.route("/download-plots", methods=["GET"])
+def download_plots():
     hist = session.get("hist_path")
     box = session.get("box_path")
 
     if not hist or not box:
-        return "Plots not found", 404
+        return "Plots not found. Please calculate first.", 404
 
-    memoryFile = io.BytesIO()
-    with zipfile.ZipFile(memoryFile, "w") as zf:
-        zf.write(os.path.join("static/plots", hist), arcname=hist)
-        zf.write(os.path.join("static/plots", box), arcname=box)
+    try:
+        memory_file = io.BytesIO()
+        with zipfile.ZipFile(memory_file, "w") as zf:
+            zf.write(os.path.join(app.config["PLOTS_FOLDER"], hist), arcname=hist)
+            zf.write(os.path.join(app.config["PLOTS_FOLDER"], box), arcname=box)
 
-    memoryFile.seek(0)
-    return send_file(
-        memoryFile,
-        mimetype="application/zip",
-        as_attachment=True,
-        download_name="plots.zip",
-    )
+        memory_file.seek(0)
+        return send_file(
+            memory_file,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name="plots.zip"
+        )
+    except Exception as e:
+        print("Error in /download-plots:", e)
+        return "Failed to prepare ZIP file.", 500
 
 
 if __name__ == "__main__":
