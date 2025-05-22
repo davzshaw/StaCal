@@ -61,7 +61,7 @@ def calculateStatistics(data, isSample=True):
                 "iqr": roundSig(iqr),
                 "percentiles": {k: roundSig(v) for k, v in percentiles.items()},
                 "kolmogorovTest": ksResults,
-                "originalData": [roundSig(x) for x in data.tolist()],  # <== NUEVO
+                "originalData": [roundSig(x) for x in data.tolist()],
             }
         )
 

@@ -47,7 +47,7 @@ def random_data():
         n = int(req.get("n", 50))
         distro = req.get("distribution", "normal")
 
-        params = req.get("params", {})  # <-- Obtiene los parámetros adicionales del frontend
+        params = req.get("params", {})
         current_data = generateRandomData(n, distro, **params)
 
 
@@ -106,7 +106,6 @@ def calculate():
         if not hist_path or not box_path:
             raise Exception("Plot generation failed.")
 
-        # Save plot names in session for download/visualization
         session["hist_path"] = os.path.basename(hist_path)
         session["box_path"] = os.path.basename(box_path)
         last_plots = (hist_path, box_path)
